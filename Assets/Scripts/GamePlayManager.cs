@@ -6,32 +6,41 @@ public class GamePlayManager : MonoBehaviour
     //the world camera
     public Camera GamePlayCamera;
 
-    //the prefab of the block
+    //prefabs of tetrominoes
+    public GameObject ITetrominoPrefab;
+    public GameObject JTetrominoPrefab;
+    public GameObject LTetrominoPrefab;
+    public GameObject OTetrominoPrefab;
+    public GameObject STetrominoPrefab;
+    public GameObject TTetrominoPrefab;
+    public GameObject ZTetrominoPrefab;
+
+    //prefab of block
     public GameObject BlockPrefab;
+
+    //transform that will hold the blocks
+    public Transform BlocksHolder;
 
     //the grid information and state
     private Tetris.Grid m_grid;
 
-    //the visual grid of blocks
-    private Transform[,] m_blocks;
-
     //the current tetromino the player is holding
     private Tetris.Tetromino m_tetromino;
 
-    //the current center of the tetromino
-    private Vector2 m_tetrominoPosition;
+    //the visual representation of the current tetromino
+    private GameObject m_visualTetromino;
 
-    //the last position of the tetromino
-    private Vector2 m_tetrominoLastPosition;
+    public GameObject TetrominoVisualPosition;
 
-    //the last visual info of the tetromino
-    private bool[,] m_tetrominoLastVisual;
-
-    //if grid needs to be updated
-    private bool m_updateGrid;
+    //the visual blocks grid
+    private GameObject[,] m_blocksVisualGrid;
 
     //the coroutine for moving the blocks down
     private Coroutine m_blockMoverCoroutine;
+
+    private float m_timeCounter = 0;
+
+    private bool m_accelerated;
 
     const float TIME_TO_MOVE_BLOCKS = 1;
 
@@ -39,190 +48,272 @@ public class GamePlayManager : MonoBehaviour
     {
         //initialize the grid with default values
         m_grid = new Tetris.Grid();
-
-        //create the blocks in the world
-        m_blocks = new Transform[m_grid.Lines, m_grid.Columns];
-        //for(int i = 0; i < m_grid.Lines; i++)
-        //{
-        //    for(int j = 0; j < m_grid.Columns; j++)
-        //    {
-        for (int i = 0; i < m_grid.Columns; i++)
-        {
-            for (int j = 0; j < m_grid.Lines; j++)
-            {
-                GameObject block = Instantiate(BlockPrefab);
-
-                //block.SetActive(false);
-
-                //block.transform.position = new Vector3(m_grid.Lines - i - 1, m_grid.Columns + j, 0);
-                //block.transform.position = new Vector3(j, i, 0);
-
-                //m_blocks[i, j] = block.transform;
-
-                //test here
-                block.transform.position = new Vector3(i, j, 0);
-
-                //m_blocks[j, i] = block.transform;
-                m_blocks[m_grid.Lines - j - 1, i] = block.transform;
-
-                block.GetComponentInChildren<TMPro.TextMeshPro>().text = "("+i.ToString() + "," + (m_grid.Lines - j - 1).ToString() + ")";
-            }
-        }
+        m_blocksVisualGrid = new GameObject[m_grid.Rows, m_grid.Columns];
 
         //create a tetromino
         GetRandomTetromino();
 
-        //setting the tetromino at the middle of grid
-        //m_tetrominoPosition = new Vector2(m_grid.Lines/2, m_grid.Columns/2);
-        m_tetrominoPosition = Vector2.zero;
-
         //start the block move down
-        m_blockMoverCoroutine = StartCoroutine(MoveBlocks(TIME_TO_MOVE_BLOCKS));
-
-        m_updateGrid = true;
-        UpdateGrid();
+        m_blockMoverCoroutine = StartCoroutine(MoveBlocks());
     }
 
-    IEnumerator MoveBlocks(float time)
+    IEnumerator MoveBlocks()
     {
-        yield return new WaitForSeconds(time);
+        while(m_timeCounter < TIME_TO_MOVE_BLOCKS)
+        {
+            m_timeCounter += (Time.deltaTime * (m_accelerated ? 10 : 1));
+            yield return null;
+        }
 
-        //for testing
-        //UpdateTetrominoRotation(Tetris.RotationDirection.CLOCKWISE);
+        m_timeCounter = 0;
 
-        m_updateGrid = true;
+        //test if the block can move down
+        //if false, it means the block has settled
+        TranslateTetrominoVertically(Tetris.VerticalTranslationDirection.DOWN);
 
-        m_blockMoverCoroutine = StartCoroutine(MoveBlocks(TIME_TO_MOVE_BLOCKS));
-
+        m_blockMoverCoroutine = StartCoroutine(MoveBlocks());
     } 
 
     private void GetRandomTetromino()
     {
-        if(m_tetromino == null)
+        //m_tetromino = Tetris.TetrominoUtils.GetTetromino(Tetris.TetrominoType.O);
+        m_tetromino = Tetris.TetrominoUtils.GetRandomTetromino();
+        
+        //clear the old visual tetromino
+        if (m_visualTetromino != null)
         {
-            m_tetromino = Tetris.TetrominoManager.GetTetromino(Tetris.TetrominoType.L);
-            //m_tetromino = Tetris.TetrominoManager.GetRandomTetromino();
-            //set the last data to be current's
-            m_tetrominoLastPosition = m_tetrominoPosition;
-            m_tetrominoLastVisual = m_tetromino.Matrix;
-        }
-        else
-        {
-            m_tetromino = Tetris.TetrominoManager.GetRandomTetromino();
+            Destroy(m_visualTetromino);
         }
 
-        Debug.Log(m_tetromino.TetrominoType + " / " + m_tetromino.Orientation);
+        //create the visual of the tetromino and define it's initial offset
+        switch (m_tetromino.TetrominoType)
+        {
+            case Tetris.TetrominoType.I:
+                m_visualTetromino = Instantiate(ITetrominoPrefab);
+                break;
+            case Tetris.TetrominoType.J:
+                m_visualTetromino = Instantiate(JTetrominoPrefab);
+                break;
+            case Tetris.TetrominoType.L:
+                m_visualTetromino = Instantiate(LTetrominoPrefab);
+                break;
+            case Tetris.TetrominoType.O:
+                m_visualTetromino = Instantiate(OTetrominoPrefab);
+                break;
+            case Tetris.TetrominoType.S:
+                m_visualTetromino = Instantiate(STetrominoPrefab);
+                break;
+            case Tetris.TetrominoType.T:
+                m_visualTetromino = Instantiate(TTetrominoPrefab);
+                break;
+            case Tetris.TetrominoType.Z:
+                m_visualTetromino = Instantiate(ZTetrominoPrefab);
+                break;
+        }
+        m_visualTetromino.transform.SetParent(transform);
 
-        m_updateGrid = true;
-
-        UpdateGrid();
+        //position it at the horizontal center of the grid
+        //we translate it additionally to keep up with the SRS spawning positions
+        Vector2Int tetrominoOffset = new Vector2Int(-1, -1);
+        //add the spawn zone to the translation
+        tetrominoOffset.x += Tetris.Grid.SPAWN_ZONE;
+        m_tetromino.SetPosition(0 + tetrominoOffset.x, (m_grid.Columns / 2) + tetrominoOffset.y);
+        UpdateVisualTetrominoPosition();
     }
 
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.RightArrow))
-        {
-            
+        //rotates the tetromino clockwise
+        if (Input.GetKeyDown(KeyCode.UpArrow))
+        {          
             UpdateTetrominoRotation(Tetris.RotationDirection.CLOCKWISE);
         }
-        else if (Input.GetKeyDown(KeyCode.LeftArrow))
+        
+        //horizontal/vertical movment of the tetromino
+        if (Input.GetKeyDown(KeyCode.RightArrow))
         {
-            UpdateTetrominoRotation(Tetris.RotationDirection.COUNTER_CLOCKWISE);
+            m_grid.TryTranslateTetrominoHorizontally(
+                m_tetromino,
+                Tetris.HorizontalTranslationDirection.RIGHT);
+            UpdateVisualTetrominoPosition();
+        }
+        else if(Input.GetKeyDown(KeyCode.LeftArrow))
+        {
+            m_grid.TryTranslateTetrominoHorizontally(
+                m_tetromino,
+                Tetris.HorizontalTranslationDirection.LEFT);
+            UpdateVisualTetrominoPosition();
+        }
+        
+        //accelerates the descending
+        if (Input.GetKeyDown(KeyCode.DownArrow))
+        {
+            m_accelerated = true;
+        }
+        if (Input.GetKeyUp(KeyCode.DownArrow))
+        {
+            m_accelerated = false;
         }
 
         if (Input.GetKeyDown(KeyCode.Space))
             GetRandomTetromino();
-
-        UpdateGrid();
     }
 
-    private void UpdateTetrominoPosition(Vector2 positon)
+    private void TranslateTetrominoVertically(Tetris.VerticalTranslationDirection direction)
     {
-        m_tetrominoLastPosition = m_tetrominoPosition;
-        m_tetrominoPosition = positon;
+        if (m_grid.TryTranslateTetrominoVertically(
+                m_tetromino,
+                Tetris.VerticalTranslationDirection.DOWN))
+        {
+            //the tetromino was translated
+            UpdateVisualTetrominoPosition();
+        }
+        else
+        {
+            m_grid.AddTetrominoToGrid(m_tetromino);
 
-        m_updateGrid = true;
+            //the tetromino was added to the grid, so we need to update the visuals
+
+            //create blocks to fill the visual grid based on the tetromino's matrix and position
+            //save the material
+            Material mat =
+                m_visualTetromino.transform.GetComponentInChildren<Renderer>().material;
+
+            int jOffset = 1;
+            float positionXoffset = - 0.5f;
+            float positionYoffset = 1.5f;
+            
+            for (int i = 0; i < m_tetromino.MatrixRows; i++)
+            {
+                for (int j = 0; j < m_tetromino.MatrixColumns; j++)
+                {
+                    if (m_tetromino[i, j])
+                    {
+                        //create a block
+                        GameObject block = Instantiate(BlockPrefab, BlocksHolder);
+                        block.GetComponent<Renderer>().material = mat;
+
+                        //position the block, transposed because unity's orientation is different from matrix orientation
+                        int blockPositionX = m_tetromino.PosJ + j - jOffset;
+                        int blockPositionY = m_grid.Rows - 1 - m_tetromino.PosI - i;
+
+                        block.transform.position =
+                            new Vector3(
+                                blockPositionX + positionXoffset,
+                                blockPositionY + positionYoffset,
+                                0);
+                    }
+                }
+            }
+
+            //try to consume row
+            int row = m_grid.ConsumeRow();
+            if (row != -1)
+            {
+                DropBlocks(row);
+                StartCoroutine(WaitRowConsumptionAnimation());
+            }
+        }
+    }
+
+    IEnumerator WaitRowConsumptionAnimation()
+    {
+        yield return new WaitForSeconds(0.5f);
+
+        int row = m_grid.ConsumeRow();
+        if (row != -1)
+        {
+            DropBlocks(row);
+            StartCoroutine(WaitRowConsumptionAnimation());
+        }
+        else
+        {
+            //get a new tetromino
+            GetRandomTetromino();
+        }
+    }
+
+    private void DropBlocks(int row)
+    {
+
+    }
+
+    private void UpdateVisualTetrominoPosition()
+    {      
+        //we have to translate the visual tetromino because how they
+        //are centralized and the 3D model's pivot
+        Vector2 tetrominoOffset = new Vector2(-0.5f, 0.5f);
+        if (m_tetromino.TetrominoType == Tetris.TetrominoType.O) 
+        {
+            tetrominoOffset = Vector2.up;
+        }
+        else if(m_tetromino.TetrominoType == Tetris.TetrominoType.I)
+        {
+            tetrominoOffset = Vector2.zero;
+        }
+    
+        m_visualTetromino.transform.position =
+            new Vector3(
+                m_tetromino.PosJ + tetrominoOffset.x,
+                m_grid.Rows - 1 - m_tetromino.PosI + tetrominoOffset.y,
+                0);
+
+        //REMOVE THIS LATERRRRR ----------------------------------------------------------------------------------------------------------
+        //$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+        TetrominoVisualPosition.transform.position =
+            new Vector3(
+                m_tetromino.PosJ,
+                m_grid.Rows - 1 - m_tetromino.PosI,
+                0);
     }
 
     private void UpdateTetrominoRotation(Tetris.RotationDirection direction)
     {
-        //no point in rotating a O block
+        //no point in rotating an O tetromino
         if (m_tetromino.TetrominoType == Tetris.TetrominoType.O)
             return;
 
-        m_tetrominoLastVisual = m_tetromino.Matrix;
-
         //the new rotation
         bool[,] matrix =
-            Tetris.TetrominoManager.GetRotatedSquareBlockMatrix(m_tetromino.Matrix, direction);
+            Tetris.TetrominoUtils.GetRotatedSquareBlockMatrix(m_tetromino.Matrix, direction);
 
         m_tetromino.SetMatrix(matrix);
 
         int orientationIncrement = direction == Tetris.RotationDirection.CLOCKWISE ? 1 : -1;
         int finalOrientation = (int)m_tetromino.Orientation + orientationIncrement;
-        //ratated counter clockwise from up
+        //rotated counter clockwise from up
         if (finalOrientation < 0)
             finalOrientation = 3;
         //rotated clockwise from left
         if (finalOrientation > 3)
             finalOrientation = 0;
 
-        m_tetromino.SetOrientation((Tetris.TetrominoOrientation)finalOrientation);
+        m_tetromino.SetOrientation(
+            (Tetris.TetrominoOrientation)finalOrientation);
 
-        m_updateGrid = true;
-    }
-
-    private void UpdateGrid()
-    {
-        if (!m_updateGrid)
-            return;
-
-        //update the grid visuals
-        m_updateGrid = false;
-
-        //erase the last visual data from the grid
-        int lastVisualHeight = m_tetrominoLastVisual.GetLength(0) + (int)m_tetrominoLastPosition.x;
-        int lastVisualWidth = m_tetrominoLastVisual.GetLength(1) + (int)m_tetrominoLastPosition.y;
-        for (int lastVisualH = (int)m_tetrominoLastPosition.x; lastVisualH < lastVisualHeight; lastVisualH++)
+        //set the visual tetromino orientation accordingly
+        switch (m_tetromino.Orientation)
         {
-            for (int lastVisualW = (int)m_tetrominoLastPosition.y; lastVisualW < lastVisualWidth; lastVisualW++)
-            {
-                m_grid.UpdateMatrixPosition(
-                    lastVisualH,
-                    lastVisualW,
-                    false);
-            }
-        }
-
-        //add the new visual data to the grid
-        int VisualHeight = m_tetromino.Matrix.GetLength(0) + (int)m_tetrominoPosition.x;
-        int VisualWidth = m_tetromino.Matrix.GetLength(1) + (int)m_tetrominoPosition.y;
-        for (int VisualH = (int)m_tetrominoPosition.x; VisualH < VisualHeight; VisualH++)
-        {
-            for (int visualW = (int)m_tetrominoPosition.y; visualW < VisualWidth; visualW++)
-            {
-                m_grid.UpdateMatrixPosition(
-                    VisualH,
-                    visualW,
-                    m_tetromino[
-                        VisualH - (int)m_tetrominoPosition.x,
-                        visualW - (int)m_tetrominoPosition.y]);
-            }
-        }
-
-        //update the visual of blocks
-        for(int i = 0; i < m_grid.Lines; i++)
-        {
-            for(int j = 0; j < m_grid.Columns; j++)
-            {
-                //m_blocks[i, j].gameObject.SetActive(m_grid[i, j]);
-                m_blocks[i, j].gameObject.SetActive(true);
-
-                if (m_grid[i, j])
-                    m_blocks[i, j].GetComponent<Renderer>().material.color = Color.yellow;
-                else
-                    m_blocks[i, j].GetComponent<Renderer>().material.color = Color.white;
-            }
+            case Tetris.TetrominoOrientation.UP:
+                //up is the default orientation
+                m_visualTetromino.transform.rotation =
+                    Quaternion.Euler(Vector3.zero);
+                break;
+            case Tetris.TetrominoOrientation.RIGHT:
+                //rotated 90 degrees right
+                m_visualTetromino.transform.rotation =
+                    Quaternion.Euler(Vector3.forward * -90);
+                break;
+            case Tetris.TetrominoOrientation.DOWN:
+                //rotated 180 degrees right
+                m_visualTetromino.transform.rotation =
+                    Quaternion.Euler(Vector3.forward * -180);
+                break;
+            case Tetris.TetrominoOrientation.LEFT:
+                //rotated 270 degrees right
+                m_visualTetromino.transform.rotation =
+                    Quaternion.Euler(Vector3.forward * -270);
+                break;
         }
     }
 }
